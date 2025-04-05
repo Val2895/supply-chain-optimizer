@@ -207,7 +207,7 @@ if user_question:
 
         try:
             response = openai.ChatCompletion.create(
-                model="mixtral-8x7b-32768",
+                model="mixtral-8x7b",  # 👈 UPDATED MODEL HERE
                 messages=[
                     {"role": "system", "content": "You are a global sourcing and supply chain advisor, helping users find suppliers, vendors, and sourcing hubs for their selected product categories and countries."},
                     {"role": "user", "content": user_question}
@@ -220,7 +220,6 @@ if user_question:
             st.error(f"⚠️ Failed to get a response: {e}")
     else:
         st.warning("Please enter your Groq API key above to use the Vendor Sourcing Advisor.")
-
 
 
 
