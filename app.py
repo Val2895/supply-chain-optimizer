@@ -92,8 +92,6 @@ if "opt_inputs" not in st.session_state:
     st.session_state.opt_inputs = {}
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
-if "chat_input" not in st.session_state:
-    st.session_state.chat_input = ""
 if "last_inputs" not in st.session_state:
     st.session_state.last_inputs = {"category": None, "subcategory": None, "country": None}
 if "optimization_display" not in st.session_state:
@@ -112,7 +110,7 @@ with st.sidebar:
         st.caption(f"_In Words: {number_to_words(annual_import_value)}_")
     individual_shipment_value = st.number_input("Individual Shipment Value ($) (Optional):", min_value=0, step=100, key="shipment_value")
     
-    # When clicking "Optimize Supply Chain", reset chat history and chat input
+    # When clicking "Optimize Supply Chain", reset chat history
     if st.button("🔍 Optimize Supply Chain"):
         st.session_state.opt_inputs = {
             "category": category,
@@ -123,7 +121,6 @@ with st.sidebar:
             "run_optimization": True
         }
         st.session_state.chat_history = []
-        st.session_state.chat_input = ""
 
 # --- Chat Reset Logic Based on Input Changes
 current_inputs = {
@@ -133,7 +130,6 @@ current_inputs = {
 }
 if current_inputs != st.session_state.last_inputs:
     st.session_state.chat_history = []
-    st.session_state.chat_input = ""
     st.session_state.last_inputs = current_inputs
 
 # --- Optimization Logic
@@ -209,14 +205,16 @@ if st.session_state.get("optimization_display", False):
     top_option = st.session_state.optimization_top_option
     st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
 
-# --- Vendor Sourcing (Groq Chat)
+# --- Vendor Sourcing (Groq Chat) using a form
 st.markdown("---")
 st.subheader("🤖 Vendor Sourcing Advisor (Powered by Groq AI)")
 st.caption("Ask questions like 'Find me apparel manufacturers in Vietnam' or 'Where can I source electronics in Mexico?'")
 
-# Use session state chat_input for the chat text input
-user_question = st.text_input("Ask your sourcing question:", key="chat_input")
-if user_question:
+with st.form("chat_form", clear_on_submit=True):
+    user_question = st.text_input("Ask your sourcing question:")
+    submit_chat = st.form_submit_button("Submit")
+
+if submit_chat and user_question:
     loading_message = st.empty()
     loading_message.info("Generating answer... Please wait a few seconds!")
     try:
@@ -243,8 +241,6 @@ if user_question:
                 "user": user_question,
                 "assistant": answer
             })
-            # Clear the chat input after submission
-            st.session_state.chat_input = ""
         except Exception as e:
             loading_message.empty()
             st.error(f"⚠️ Failed to get a response: {e}")
