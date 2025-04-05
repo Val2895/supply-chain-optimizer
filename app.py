@@ -106,7 +106,8 @@ with st.sidebar:
         st.caption(f"_In Words: {number_to_words(annual_import_value)}_")
     individual_shipment_value = st.number_input("Individual Shipment Value ($) (Optional):", min_value=0, step=100, key="shipment_value")
 
-    if st.button("🔍 Optimize Supply Chain"):
+     if st.button("🔍 Optimize Supply Chain"):
+        st.session_state.chat_history = []  # <-- ADD THIS LINE
         st.session_state.opt_inputs = {
             "category": category,
             "subcategory": subcategory,
@@ -115,6 +116,7 @@ with st.sidebar:
             "shipment_value": individual_shipment_value,
             "run_optimization": True
         }
+
 
 # --- Auto Reset Chat History if Inputs Change
 if "last_inputs" not in st.session_state:
