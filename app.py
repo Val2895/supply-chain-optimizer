@@ -193,8 +193,12 @@ st.caption("Ask anything like 'Find me apparel manufacturers in Vietnam' or 'Whe
 
 user_question = st.text_input("Ask your sourcing question:")
 
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
 if user_question:
-    st.info("Generating answer... Please wait a few seconds!")
+    loading_message = st.empty()
+    loading_message.info("Generating answer... Please wait a few seconds!")
 
     try:
         groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -207,20 +211,32 @@ if user_question:
 
         try:
             response = openai.ChatCompletion.create(
-                model="llama3-70b-8192",  # ✅ Correct working model
+                model="llama3-70b-8192",  # ✅ Correct model
                 messages=[
-                    {"role": "system", "content": "You are a global sourcing and supply chain advisor, helping users find suppliers, vendors, and sourcing hubs for their selected product categories and countries."},
+                    {"role": "system", "content": "You are a global sourcing and supply chain advisor, helping users find suppliers, vendors, and sourcing hubs."},
                     {"role": "user", "content": user_question}
                 ]
             )
+            answer = response['choices'][0]['message']['content']
+            loading_message.empty()  # ✅ Remove loading message after getting answer
+            st.success(answer)
 
-            st.success(response['choices'][0]['message']['content'])
+            # Save to history
+            st.session_state.chat_history.append({"user": user_question, "assistant": answer})
 
         except Exception as e:
+            loading_message.empty()
             st.error(f"⚠️ Failed to get a response: {e}")
     else:
         st.warning("Please enter your Groq API key above to use the Vendor Sourcing Advisor.")
 
+# --- Show Chat History
+if st.session_state.chat_history:
+    with st.expander("🗂️ Chat History"):
+        for entry in reversed(st.session_state.chat_history):
+            st.markdown(f"**You:** {entry['user']}")
+            st.markdown(f"**Advisor:** {entry['assistant']}")
+            st.markdown("---")
 
 
 # --- About Section
