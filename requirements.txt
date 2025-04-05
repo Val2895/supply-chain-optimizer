@@ -3,4 +3,5 @@ pandas
 matplotlib
 openpyxl
 requests
-openai
+toml
+openai==0.28.1
