@@ -78,7 +78,7 @@ def number_to_words(value):
     p = inflect.engine()
     try:
         return p.number_to_words(int(value)).capitalize() + " dollars"
-    except:
+    except Exception:
         return ""
 
 def convert_df(df):
@@ -87,27 +87,32 @@ def convert_df(df):
         df.to_excel(writer, index=False)
     return buffer.getvalue()
 
+# --- Initialize session state variables if not already set
+if "opt_inputs" not in st.session_state:
+    st.session_state.opt_inputs = {}
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "chat_input" not in st.session_state:
+    st.session_state.chat_input = ""
+if "last_inputs" not in st.session_state:
+    st.session_state.last_inputs = {"category": None, "subcategory": None, "country": None}
+if "optimization_display" not in st.session_state:
+    st.session_state.optimization_display = False
+
 # --- Sidebar Inputs
 with st.sidebar:
     st.header("📋 Input Your Data")
-
-    if "opt_inputs" not in st.session_state:
-        st.session_state.opt_inputs = {}
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = []
-
     category = st.selectbox("Select Product Category:", sorted(products.keys()), key="category")
     subcategory = None
     if products[category]:
         subcategory = st.selectbox("Select Subcategory:", sorted(products[category]), key="subcategory")
-
     country = st.selectbox("Select Current Import Country:", sorted(list(annex_tariffs.keys())), key="country")
     annual_import_value = st.number_input("Annual Import Value ($):", min_value=0, step=1000, value=100000, key="import_value")
     if annual_import_value:
         st.caption(f"_In Words: {number_to_words(annual_import_value)}_")
     individual_shipment_value = st.number_input("Individual Shipment Value ($) (Optional):", min_value=0, step=100, key="shipment_value")
-
-    # When clicking "Optimize Supply Chain", reset chat history as well
+    
+    # When clicking "Optimize Supply Chain", reset chat history and chat input
     if st.button("🔍 Optimize Supply Chain"):
         st.session_state.opt_inputs = {
             "category": category,
@@ -117,20 +122,18 @@ with st.sidebar:
             "shipment_value": individual_shipment_value,
             "run_optimization": True
         }
-        st.session_state.chat_history = []  # Reset chat history
+        st.session_state.chat_history = []
+        st.session_state.chat_input = ""
 
 # --- Chat Reset Logic Based on Input Changes
-if "last_inputs" not in st.session_state:
-    st.session_state.last_inputs = {"category": None, "subcategory": None, "country": None}
-
 current_inputs = {
     "category": category,
     "subcategory": subcategory,
     "country": country
 }
-
 if current_inputs != st.session_state.last_inputs:
     st.session_state.chat_history = []
+    st.session_state.chat_input = ""
     st.session_state.last_inputs = current_inputs
 
 # --- Optimization Logic
@@ -138,9 +141,8 @@ if st.session_state.opt_inputs.get("run_optimization"):
     inputs = st.session_state.opt_inputs
     clean_category = inputs["category"].split(' (')[0]
     current_tariff = get_tariff(inputs["country"])
-
     st.subheader("📈 Current Tariff Situation")
-
+    
     if clean_category in excluded_categories:
         st.success(f"✅ {clean_category} is excluded from new tariff rules. No optimization needed.")
         st.markdown(f"""
@@ -159,13 +161,10 @@ if st.session_state.opt_inputs.get("run_optimization"):
                 continue
             savings_amount = (savings_percentage / 100) * inputs["import_value"]
             strength = get_supply_strength(alt_country, clean_category)
-
-            # Only check Canada for its special case here
             if alt_country == "Canada" and alt_tariff == 0:
                 excluded_status = "✅ Excluded"
             else:
                 excluded_status = "❗ Subject to Tariffs"
-
             output_rows.append({
                 "Alternative Country": alt_country,
                 "New Tariff %": alt_tariff,
@@ -174,14 +173,11 @@ if st.session_state.opt_inputs.get("run_optimization"):
                 "Supply Strength": strength,
                 "Tariff Status": excluded_status
             })
-
         if output_rows:
             result_df = pd.DataFrame(output_rows)
             strength_priority = {"High": 1, "Medium": 2, "Low": 3}
             result_df['Priority'] = result_df['Supply Strength'].map(strength_priority)
             result_df = result_df.sort_values(by=['Priority', 'Saving %'], ascending=[True, False])
-
-            # Save optimization results in session state to persist them
             st.session_state.optimization_result_df = result_df
             top5_df = result_df.head(5)
             st.session_state.optimization_top5_df = top5_df
@@ -191,8 +187,6 @@ if st.session_state.opt_inputs.get("run_optimization"):
         else:
             st.warning("❗ No better alternative countries found.")
             st.session_state.optimization_display = False
-
-    # Reset the flag after processing
     st.session_state.opt_inputs["run_optimization"] = False
 
 # --- Display Optimization Results (Persisting Visualization)
@@ -203,7 +197,7 @@ if st.session_state.get("optimization_display", False):
         "Saving %": "{:.1f}%"
     }))
     st.download_button("📥 Download Results as Excel", data=convert_df(st.session_state.optimization_result_df), file_name="tariff_optimization_full.xlsx")
-
+    
     st.subheader("💰 Estimated Savings by Top 5 Countries")
     fig, ax = plt.subplots(figsize=(10, 6))
     ax.barh(st.session_state.optimization_top5_df['Alternative Country'], st.session_state.optimization_top5_df['Estimated Annual Savings ($)'])
@@ -211,7 +205,7 @@ if st.session_state.get("optimization_display", False):
     ax.set_title('Top 5 Savings Opportunity by Country')
     ax.invert_yaxis()
     st.pyplot(fig)
-
+    
     top_option = st.session_state.optimization_top_option
     st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
 
@@ -220,21 +214,18 @@ st.markdown("---")
 st.subheader("🤖 Vendor Sourcing Advisor (Powered by Groq AI)")
 st.caption("Ask questions like 'Find me apparel manufacturers in Vietnam' or 'Where can I source electronics in Mexico?'")
 
-user_question = st.text_input("Ask your sourcing question:")
-
+# Use session state chat_input for the chat text input
+user_question = st.text_input("Ask your sourcing question:", key="chat_input")
 if user_question:
     loading_message = st.empty()
     loading_message.info("Generating answer... Please wait a few seconds!")
-
     try:
         groq_api_key = st.secrets["GROQ_API_KEY"]
     except KeyError:
         groq_api_key = st.text_input("🔑 Enter your Groq API Key:", type="password")
-
     if groq_api_key:
         openai.api_key = groq_api_key
         openai.api_base = "https://api.groq.com/openai/v1"
-
         try:
             response = openai.ChatCompletion.create(
                 model="llama3-70b-8192",
@@ -245,16 +236,15 @@ if user_question:
             )
             answer = response['choices'][0]['message']['content']
             loading_message.empty()
-
             st.markdown(f"**🧑 You:** {user_question}")
             st.markdown(f"**🤖 Advisor:** {answer}")
             st.divider()
-
             st.session_state.chat_history.append({
                 "user": user_question,
                 "assistant": answer
             })
-
+            # Clear the chat input after submission
+            st.session_state.chat_input = ""
         except Exception as e:
             loading_message.empty()
             st.error(f"⚠️ Failed to get a response: {e}")
