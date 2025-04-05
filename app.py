@@ -210,20 +210,24 @@ if user_question:
         openai.api_base = "https://api.groq.com/openai/v1"
 
         try:
-            response = openai.ChatCompletion.create(
-                model="llama3-70b-8192",  # ✅ Correct model
-                messages=[
-                    {"role": "system", "content": "You are a global sourcing and supply chain advisor, helping users find suppliers, vendors, and sourcing hubs."},
-                    {"role": "user", "content": user_question}
-                ]
-            )
-            # After getting response from Groq
-answer = response['choices'][0]['message']['content']
-loading_message.empty()  # ✅ Remove loading
-st.markdown(answer)      # ✅ Display clean plain answer (no green box)
+    response = openai.ChatCompletion.create(
+        model="llama3-70b-8192",
+        messages=[
+            {"role": "system", "content": "You are a global sourcing and supply chain advisor, helping users find suppliers, vendors, and sourcing hubs."},
+            {"role": "user", "content": user_question}
+        ]
+    )
+    answer = response['choices'][0]['message']['content']
+    loading_message.empty()
+    st.markdown(answer)
 
-# Save to history
-st.session_state.chat_history.append({"user": user_question, "assistant": answer})
+    # Save to chat history
+    st.session_state.chat_history.append({"user": user_question, "assistant": answer})
+
+except Exception as e:
+    loading_message.empty()
+    st.error(f"⚠️ Failed to get a response: {e}")
+
 
         except Exception as e:
             loading_message.empty()
