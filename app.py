@@ -115,6 +115,20 @@ with st.sidebar:
             "run_optimization": True
         }
 
+# --- Auto Reset Chat History if Inputs Change
+if "last_inputs" not in st.session_state:
+    st.session_state.last_inputs = {"category": None, "subcategory": None, "country": None}
+
+current_inputs = {
+    "category": category,
+    "subcategory": subcategory,
+    "country": country
+}
+
+if current_inputs != st.session_state.last_inputs:
+    st.session_state.chat_history = []  # Clear old chat
+    st.session_state.last_inputs = current_inputs  # Update
+
 # --- Optimization Logic
 if st.session_state.opt_inputs.get("run_optimization"):
 
@@ -184,98 +198,3 @@ if st.session_state.opt_inputs.get("run_optimization"):
             st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
         else:
             st.warning("❗ No better alternative countries found.")
-
-
-
-
-
-# --- Vendor Discovery Section (Groq AI Chat)
-st.markdown("---")
-st.subheader("🤖 Vendor Sourcing Advisor (Powered by Groq AI)")
-
-st.caption("Ask anything like 'Find me apparel manufacturers in Vietnam' or 'Where can I source electronics in Mexico?'")
-
-# Initialize chat history
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
-# --- New Chat Input FIRST
-user_question = st.text_input("Ask your sourcing question:")
-
-if user_question:
-    loading_message = st.empty()
-    loading_message.info("Generating answer... Please wait a few seconds!")
-
-    try:
-        groq_api_key = st.secrets["GROQ_API_KEY"]
-    except KeyError:
-        groq_api_key = st.text_input("🔑 Enter your Groq API Key:", type="password")
-
-    if groq_api_key:
-        openai.api_key = groq_api_key
-        openai.api_base = "https://api.groq.com/openai/v1"
-
-        try:
-            response = openai.ChatCompletion.create(
-                model="llama3-70b-8192",
-                messages=[
-                    {"role": "system", "content": "You are a global sourcing and supply chain advisor."},
-                    {"role": "user", "content": user_question}
-                ]
-            )
-            answer = response['choices'][0]['message']['content']
-            loading_message.empty()
-
-            # Immediately show the latest answer nicely
-            st.markdown(f"**🧑 You:** {user_question}")
-            st.markdown(f"**🤖 Advisor:** {answer}")
-            st.divider()
-
-            # Save this chat to history
-            st.session_state.chat_history.append({
-                "user": user_question,
-                "assistant": answer
-            })
-
-        except Exception as e:
-            loading_message.empty()
-            st.error(f"⚠️ Failed to get a response: {e}")
-    else:
-        st.warning("Please enter your Groq API key above to use the Vendor Sourcing Advisor.")
-
-# --- Show Past Chats in Expanders BELOW
-if st.session_state.chat_history:
-    st.subheader("🗂️ Previous Conversations")
-    for i, entry in enumerate(reversed(st.session_state.chat_history), start=1):
-        with st.expander(f"Chat #{i}: {entry['user']}"):
-            st.markdown(f"**🧑 You:** {entry['user']}")
-            st.markdown(f"**🤖 Advisor:** {entry['assistant']}")
-
-# --- About the App
-st.markdown("---")
-with st.expander("ℹ️ About this App"):
-    st.write("""
-    **Supply Chain Tariff Optimization AI** is a smart platform designed to help businesses navigate the evolving global trade environment, especially in light of the 2025 US tariff updates.
-
-    Built to empower sourcing and procurement leaders, the tool analyzes tariff impacts, identifies alternative sourcing opportunities, estimates potential savings, and offers AI-powered vendor discovery — all within a clean, executive-ready experience.
-
-    **About the Creator:**
-
-    Vishal Singh — a passionate Supply Chain Professional and current Graduate Student at **SUNY Buffalo** — developed this platform to bridge real-world trade challenges with modern AI capabilities. 
-
-    His mission is to help companies make smarter sourcing decisions, turn tariff disruptions into competitive advantage, and embrace AI in practical, business-driven ways.
-
-    **Powered by:** Groq AI + Streamlit
-
-    ---
-    🔒 **Important Disclaimer:**
-
-    The Supply Chain Tariff Optimization AI tool provides estimated tariff impacts and sourcing recommendations based on the April 2025 US trade policy updates and public HS Code classifications.
-
-    While excluded product categories (e.g., Food, Medicine, Semiconductors) are generally not subject to the new reciprocal tariffs, certain goods may still be subject to existing base tariffs under prior trade rules, typically ranging from 0% to 4%. In rare cases, specific subcategories (e.g., finished goods, processed materials) may incur slightly higher duties.
-
-    Users are encouraged to verify specific tariff rates for their products with customs brokers or trade compliance experts before finalizing sourcing decisions.
-
-    This tool is intended for informational and strategic planning purposes only and does not constitute legal or regulatory advice.
-    """)
-    st.caption("Created with care for the global sourcing community.")
