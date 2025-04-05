@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import requests
 import openai
 import toml
-import inflect
 from io import BytesIO
 
 # --- Load Theme Settings
@@ -80,19 +79,6 @@ def convert_df(df):
         df.to_excel(writer, index=False)
     return buffer.getvalue()
 
-def format_number_with_commas(value):
-    try:
-        return "{:,}".format(int(value))
-    except:
-        return value
-
-def number_to_words(value):
-    p = inflect.engine()
-    try:
-        return p.number_to_words(int(value)).capitalize() + " dollars"
-    except:
-        return ""
-
 # --- Sidebar Inputs
 st.sidebar.header("📋 Input Your Data")
 
@@ -103,14 +89,8 @@ if products[category]:
 
 country = st.sidebar.selectbox("Select Current Import Country:", sorted(list(annex_tariffs.keys())))
 
-annual_import_value = st.sidebar.text_input("Annual Import Value ($):", value="100000")
-formatted_value = format_number_with_commas(annual_import_value)
-amount_in_words = number_to_words(annual_import_value)
-
-st.sidebar.markdown(f"**Formatted:** {formatted_value}")
-st.sidebar.caption(f"_Entered amount: {amount_in_words}_")
-
-individual_shipment_value = st.sidebar.number_input("Individual Shipment Value ($) (Optional):", value=0, step=100)
+annual_import_value = st.sidebar.number_input("Annual Import Value ($):", min_value=0, step=1000, value=100000)
+individual_shipment_value = st.sidebar.number_input("Individual Shipment Value ($) (Optional):", min_value=0, step=100)
 
 search = st.sidebar.button("🔍 Optimize Supply Chain")
 
@@ -118,6 +98,7 @@ search = st.sidebar.button("🔍 Optimize Supply Chain")
 if search:
 
     st.subheader("📈 Current Tariff Situation")
+
     clean_category = category.split(' (')[0]
 
     if clean_category in excluded_categories:
@@ -125,12 +106,6 @@ if search:
     else:
         if individual_shipment_value and country in ['China', 'Hong Kong'] and individual_shipment_value < 800:
             st.warning("⚠️ De Minimis eliminated for China/Hong Kong under $800 shipments. Full duties now apply.")
-
-        try:
-            annual_import_value_int = int(str(annual_import_value).replace(",", ""))
-        except:
-            st.error("Invalid import value entered.")
-            st.stop()
 
         current_tariff = get_tariff(country)
         st.info(f"Current Tariff from **{country}**: **{current_tariff}%**")
@@ -143,15 +118,18 @@ if search:
             savings_percentage = current_tariff - alt_tariff
             if savings_percentage <= 0:
                 continue
-            savings_amount = (savings_percentage / 100) * annual_import_value_int
+            savings_amount = (savings_percentage / 100) * annual_import_value
             strength = get_supply_strength(alt_country, clean_category)
+
+            excluded = "✅ Excluded" if clean_category in excluded_categories else "❗ Subject to Tariffs"
 
             output_rows.append({
                 "Alternative Country": alt_country,
                 "New Tariff %": alt_tariff,
                 "Saving %": round(savings_percentage, 1),
                 "Estimated Annual Savings ($)": savings_amount,
-                "Supply Strength": strength
+                "Supply Strength": strength,
+                "Tariff Status": excluded
             })
 
         if output_rows:
@@ -162,7 +140,7 @@ if search:
 
             top5_df = result_df.head(5)
 
-            st.subheader("📊 Alternative Country Recommendations")
+            st.subheader("📊 Alternative Country Recommendations (Top 5)")
             st.dataframe(top5_df.style.format({
                 "Estimated Annual Savings ($)": "${:,.2f}",
                 "Saving %": "{:.1f}%"
@@ -180,40 +158,44 @@ if search:
 
             # Top Recommendation
             top_option = top5_df.iloc[0]
-            st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']})")
+            st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
 
-            # --- New Vendor Help Search
+            # --- New Vendor Help Search (Groq Chat)
             st.subheader("🚀 Sourcing Help")
-            vendor_query = st.text_input("What sourcing help do you want? (Example: 'Find top furniture vendors in Vietnam')")
 
             if "chat_history" not in st.session_state:
                 st.session_state.chat_history = []
 
-            if vendor_query:
-                api_key = st.secrets["GROQ_API_KEY"]
-                openai.api_key = api_key
-                openai.api_base = "https://api.groq.com/openai/v1"
+            with st.form("vendor_search_form"):
+                vendor_query = st.text_input("What sourcing help do you want? (e.g., 'Find furniture vendors in Vietnam')")
+                submitted = st.form_submit_button("Search")
 
-                with st.spinner("Fetching sourcing suggestions..."):
-                    try:
-                        response = openai.ChatCompletion.create(
-                            model="llama3-70b-8192",
-                            messages=[
-                                {"role": "system", "content": "You are a global sourcing expert helping businesses find vendors and platforms for international trade."},
-                                {"role": "user", "content": vendor_query},
-                            ],
-                            temperature=0.3,
-                            max_tokens=1000
-                        )
-                        reply = response['choices'][0]['message']['content']
-                        st.session_state.chat_history.append((vendor_query, reply))
-                    except Exception as e:
-                        st.error(f"⚠️ Failed to get a response: {str(e)}")
+                if submitted and vendor_query:
+                    api_key = st.secrets["GROQ_API_KEY"]
+                    openai.api_key = api_key
+                    openai.api_base = "https://api.groq.com/openai/v1"
+
+                    with st.spinner("Fetching sourcing suggestions..."):
+                        try:
+                            response = openai.ChatCompletion.create(
+                                model="llama3-70b-8192",
+                                messages=[
+                                    {"role": "system", "content": "You are a global sourcing expert helping businesses find vendors and platforms for international trade."},
+                                    {"role": "user", "content": vendor_query},
+                                ],
+                                temperature=0.3,
+                                max_tokens=1000
+                            )
+                            reply = response['choices'][0]['message']['content']
+                            st.session_state.chat_history.append((vendor_query, reply))
+                        except Exception as e:
+                            st.error(f"⚠️ Failed to get a response: {str(e)}")
 
             # Display full chat history
-            for i, (q, a) in enumerate(st.session_state.chat_history[::-1]):
-                with st.expander(f"💬 Q{i+1}: {q}", expanded=False):
-                    st.write(a)
+            if st.session_state.chat_history:
+                for i, (q, a) in enumerate(st.session_state.chat_history[::-1]):
+                    with st.expander(f"💬 Q{i+1}: {q}", expanded=False):
+                        st.write(a)
 
         else:
             st.warning("❗ No better alternative countries found.")
