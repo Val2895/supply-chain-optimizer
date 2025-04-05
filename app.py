@@ -217,12 +217,13 @@ if user_question:
                     {"role": "user", "content": user_question}
                 ]
             )
-            answer = response['choices'][0]['message']['content']
-            loading_message.empty()  # ✅ Remove loading message after getting answer
-            st.success(answer)
+            # After getting response from Groq
+answer = response['choices'][0]['message']['content']
+loading_message.empty()  # ✅ Remove loading
+st.markdown(answer)      # ✅ Display clean plain answer (no green box)
 
-            # Save to history
-            st.session_state.chat_history.append({"user": user_question, "assistant": answer})
+# Save to history
+st.session_state.chat_history.append({"user": user_question, "assistant": answer})
 
         except Exception as e:
             loading_message.empty()
@@ -232,11 +233,12 @@ if user_question:
 
 # --- Show Chat History
 if st.session_state.chat_history:
-    with st.expander("🗂️ Chat History"):
+    with st.expander("🗂️ Chat History", expanded=True):
         for entry in reversed(st.session_state.chat_history):
-            st.markdown(f"**You:** {entry['user']}")
-            st.markdown(f"**Advisor:** {entry['assistant']}")
-            st.markdown("---")
+            st.markdown(f"**🧑 You:** {entry['user']}")
+            st.markdown(f"**🤖 Advisor:** {entry['assistant']}")
+            st.divider()
+
 
 
 # --- About Section
