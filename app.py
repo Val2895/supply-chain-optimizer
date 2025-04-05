@@ -209,11 +209,11 @@ if user_question:
         openai.api_key = groq_api_key
         openai.api_base = "https://api.groq.com/openai/v1"
 
-        try:
+       try:
     response = openai.ChatCompletion.create(
         model="llama3-70b-8192",
         messages=[
-            {"role": "system", "content": "You are a global sourcing and supply chain advisor, helping users find suppliers, vendors, and sourcing hubs."},
+            {"role": "system", "content": "You are a global sourcing and supply chain advisor."},
             {"role": "user", "content": user_question}
         ]
     )
@@ -228,10 +228,10 @@ except Exception as e:
     loading_message.empty()
     st.error(f"⚠️ Failed to get a response: {e}")
 
+except Exception as e:
+    loading_message.empty()
+    st.error(f"⚠️ Failed to get a response: {e}")
 
-        except Exception as e:
-            loading_message.empty()
-            st.error(f"⚠️ Failed to get a response: {e}")
     else:
         st.warning("Please enter your Groq API key above to use the Vendor Sourcing Advisor.")
 
