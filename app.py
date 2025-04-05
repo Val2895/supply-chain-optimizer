@@ -207,7 +207,7 @@ if st.session_state.get("optimization_display", False):
 
 # --- Vendor Sourcing (Groq Chat) using a form
 st.markdown("---")
-st.subheader("🤖 Vendor Sourcing Advisor (Powered by Groq AI)")
+st.subheader("🤖 Vendor Sourcing Advisor (Powered by Groq AI using LLaMA 3 model)")
 st.caption("Ask questions like 'Find me apparel manufacturers in Vietnam' or 'Where can I source electronics in Mexico?'")
 
 with st.form("chat_form", clear_on_submit=True):
