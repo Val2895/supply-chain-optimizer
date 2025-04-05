@@ -30,16 +30,17 @@ annex_tariffs = {
 # --- Product Categories
 products = {
     'Apparel': ['Cotton/Natural', 'Synthetic'],
-    'Electronics': ['Chips', 'EV Batteries', 'Consumer Devices'],
+    'Electronics': ['Chips', 'Consumer Devices'],
     'Furniture': [],
     'Steel/Aluminum': [],
     'Chemicals': ['Plastics', 'Industrial Chemicals'],
-    'Automotive Parts': ['EV Components', 'Traditional Components'],
+    'Automotive Parts': ['EV Components', 'Traditional Components', 'EV Batteries'],
     'Semiconductors': [],
     'Food': [],
     'Medicine': [],
-    'Energy/Critical Minerals': [],
+    'Energy/Critical Minerals': ['Lithium', 'Cobalt', 'Rare Earths'],
 }
+
 
 excluded_categories = [
     'Food', 'Medicine', 'Humanitarian Goods', 'Steel/Aluminum',
