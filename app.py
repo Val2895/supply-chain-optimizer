@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import requests
 import openai
 import toml
+import inflect
 from io import BytesIO
 
 # --- Load Theme Settings
@@ -73,6 +74,13 @@ def get_tariff(country):
 def get_supply_strength(country, category):
     return supply_strength_mapping.get((country, category), 'Low')
 
+def number_to_words(value):
+    p = inflect.engine()
+    try:
+        return p.number_to_words(int(value)).capitalize() + " dollars"
+    except:
+        return ""
+
 def convert_df(df):
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
@@ -90,6 +98,9 @@ if products[category]:
 country = st.sidebar.selectbox("Select Current Import Country:", sorted(list(annex_tariffs.keys())))
 
 annual_import_value = st.sidebar.number_input("Annual Import Value ($):", min_value=0, step=1000, value=100000)
+if annual_import_value:
+    st.sidebar.caption(f"_In Words: {number_to_words(annual_import_value)}_")
+
 individual_shipment_value = st.sidebar.number_input("Individual Shipment Value ($) (Optional):", min_value=0, step=100)
 
 search = st.sidebar.button("🔍 Optimize Supply Chain")
@@ -100,105 +111,104 @@ if search:
     st.subheader("📈 Current Tariff Situation")
 
     clean_category = category.split(' (')[0]
+    current_tariff = get_tariff(country)
 
     if clean_category in excluded_categories:
         st.success(f"✅ {clean_category} is excluded from new tariff rules.")
-    else:
-        if individual_shipment_value and country in ['China', 'Hong Kong'] and individual_shipment_value < 800:
-            st.warning("⚠️ De Minimis eliminated for China/Hong Kong under $800 shipments. Full duties now apply.")
 
-        current_tariff = get_tariff(country)
-        st.info(f"Current Tariff from **{country}**: **{current_tariff}%**")
+    output_rows = []
+    for alt_country in annex_tariffs.keys():
+        if alt_country == country:
+            continue
 
-        output_rows = []
-        for alt_country in annex_tariffs.keys():
-            if alt_country == country:
-                continue
-            alt_tariff = get_tariff(alt_country)
-            savings_percentage = current_tariff - alt_tariff
-            if savings_percentage <= 0:
-                continue
-            savings_amount = (savings_percentage / 100) * annual_import_value
-            strength = get_supply_strength(alt_country, clean_category)
+        alt_tariff = get_tariff(alt_country)
+        savings_percentage = current_tariff - alt_tariff
+        if savings_percentage <= 0:
+            continue
+        savings_amount = (savings_percentage / 100) * annual_import_value
+        strength = get_supply_strength(alt_country, clean_category)
 
-            excluded = "✅ Excluded" if clean_category in excluded_categories else "❗ Subject to Tariffs"
-
-            output_rows.append({
-                "Alternative Country": alt_country,
-                "New Tariff %": alt_tariff,
-                "Saving %": round(savings_percentage, 1),
-                "Estimated Annual Savings ($)": savings_amount,
-                "Supply Strength": strength,
-                "Tariff Status": excluded
-            })
-
-        if output_rows:
-            result_df = pd.DataFrame(output_rows)
-            strength_priority = {"High": 1, "Medium": 2, "Low": 3}
-            result_df['Priority'] = result_df['Supply Strength'].map(strength_priority)
-            result_df = result_df.sort_values(by=['Priority', 'Saving %'], ascending=[True, False])
-
-            top5_df = result_df.head(5)
-
-            st.subheader("📊 Alternative Country Recommendations (Top 5)")
-            st.dataframe(top5_df.style.format({
-                "Estimated Annual Savings ($)": "${:,.2f}",
-                "Saving %": "{:.1f}%"
-            }))
-
-            st.download_button("📥 Download Results as Excel", data=convert_df(top5_df), file_name="tariff_optimization_top5.xlsx")
-
-            st.subheader("💰 Estimated Savings by Top 5 Countries")
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.barh(top5_df['Alternative Country'], top5_df['Estimated Annual Savings ($)'], color='skyblue')
-            ax.set_xlabel('Estimated Annual Savings ($)')
-            ax.set_title('Top 5 Savings Opportunity by Country')
-            ax.invert_yaxis()
-            st.pyplot(fig)
-
-            # Top Recommendation
-            top_option = top5_df.iloc[0]
-            st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
-
-            # --- New Vendor Help Search (Groq Chat)
-            st.subheader("🚀 Sourcing Help")
-
-            if "chat_history" not in st.session_state:
-                st.session_state.chat_history = []
-
-            with st.form("vendor_search_form"):
-                vendor_query = st.text_input("What sourcing help do you want? (e.g., 'Find furniture vendors in Vietnam')")
-                submitted = st.form_submit_button("Search")
-
-                if submitted and vendor_query:
-                    api_key = st.secrets["GROQ_API_KEY"]
-                    openai.api_key = api_key
-                    openai.api_base = "https://api.groq.com/openai/v1"
-
-                    with st.spinner("Fetching sourcing suggestions..."):
-                        try:
-                            response = openai.ChatCompletion.create(
-                                model="llama3-70b-8192",
-                                messages=[
-                                    {"role": "system", "content": "You are a global sourcing expert helping businesses find vendors and platforms for international trade."},
-                                    {"role": "user", "content": vendor_query},
-                                ],
-                                temperature=0.3,
-                                max_tokens=1000
-                            )
-                            reply = response['choices'][0]['message']['content']
-                            st.session_state.chat_history.append((vendor_query, reply))
-                        except Exception as e:
-                            st.error(f"⚠️ Failed to get a response: {str(e)}")
-
-            # Display full chat history
-            if st.session_state.chat_history:
-                for i, (q, a) in enumerate(st.session_state.chat_history[::-1]):
-                    with st.expander(f"💬 Q{i+1}: {q}", expanded=False):
-                        st.write(a)
-
+        # --- Exclusion logic fixed
+        if clean_category in excluded_categories or alt_country in ["Canada", "Mexico"] and alt_tariff == 0:
+            excluded_status = "✅ Excluded"
         else:
-            st.warning("❗ No better alternative countries found.")
+            excluded_status = "❗ Subject to Tariffs"
+
+        output_rows.append({
+            "Alternative Country": alt_country,
+            "New Tariff %": alt_tariff,
+            "Saving %": round(savings_percentage, 1),
+            "Estimated Annual Savings ($)": savings_amount,
+            "Supply Strength": strength,
+            "Tariff Status": excluded_status
+        })
+
+    if output_rows:
+        result_df = pd.DataFrame(output_rows)
+        strength_priority = {"High": 1, "Medium": 2, "Low": 3}
+        result_df['Priority'] = result_df['Supply Strength'].map(strength_priority)
+        result_df = result_df.sort_values(by=['Priority', 'Saving %'], ascending=[True, False])
+
+        top5_df = result_df.head(5)
+
+        st.subheader("📊 Alternative Country Recommendations (Top 5)")
+        st.dataframe(top5_df.style.format({
+            "Estimated Annual Savings ($)": "${:,.2f}",
+            "Saving %": "{:.1f}%"
+        }))
+
+        st.download_button("📥 Download Results as Excel", data=convert_df(top5_df), file_name="tariff_optimization_top5.xlsx")
+
+        st.subheader("💰 Estimated Savings by Top 5 Countries")
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.barh(top5_df['Alternative Country'], top5_df['Estimated Annual Savings ($)'], color='skyblue')
+        ax.set_xlabel('Estimated Annual Savings ($)')
+        ax.set_title('Top 5 Savings Opportunity by Country')
+        ax.invert_yaxis()
+        st.pyplot(fig)
+
+        # Top Recommendation
+        top_option = top5_df.iloc[0]
+        st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
+
+        # --- Vendor Help Section
+        st.subheader("🚀 Vendor Sourcing Assistance")
+
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+
+        with st.form("vendor_chat_form"):
+            vendor_prompt = st.text_input("Ask a sourcing question (example: 'Find furniture vendors in Vietnam'):")
+            submitted = st.form_submit_button("Search")
+
+            if submitted and vendor_prompt:
+                api_key = st.secrets["GROQ_API_KEY"]
+                openai.api_key = api_key
+                openai.api_base = "https://api.groq.com/openai/v1"
+
+                try:
+                    response = openai.ChatCompletion.create(
+                        model="llama3-70b-8192",
+                        messages=[
+                            {"role": "system", "content": "You are a global sourcing expert helping businesses find vendors and platforms for international trade."},
+                            {"role": "user", "content": vendor_prompt},
+                        ],
+                        temperature=0.3,
+                        max_tokens=1000
+                    )
+                    answer = response['choices'][0]['message']['content']
+                    st.session_state.chat_history.append((vendor_prompt, answer))
+                except Exception as e:
+                    st.error(f"⚠️ Failed to get a response: {str(e)}")
+
+        # Display full chat history
+        if st.session_state.chat_history:
+            for idx, (q, a) in enumerate(reversed(st.session_state.chat_history)):
+                with st.expander(f"💬 {q}", expanded=False):
+                    st.markdown(a)
+
+    else:
+        st.warning("❗ No better alternative countries found.")
 
 # --- About Section
 st.markdown("---")
