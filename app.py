@@ -185,6 +185,45 @@ if st.session_state.opt_inputs.get("run_optimization"):
         else:
             st.warning("❗ No better alternative countries found.")
 
+# --- Vendor Discovery Section using Groq
+st.markdown("---")
+st.subheader("🤖 Vendor Sourcing Advisor (Powered by Groq AI)")
+
+st.caption("Ask anything like 'Find me apparel manufacturers in Vietnam' or 'Where can I source electronics in Mexico?'")
+
+user_question = st.text_input("Ask your sourcing question:")
+
+if user_question:
+    st.info("Generating answer... Please wait a few seconds!")
+
+    try:
+        groq_api_key = st.secrets["GROQ_API_KEY"]
+    except KeyError:
+        groq_api_key = st.text_input("🔑 Enter your Groq API Key:", type="password")
+
+    if groq_api_key:
+        openai.api_key = groq_api_key
+        openai.api_base = "https://api.groq.com/openai/v1"
+
+        try:
+            response = openai.ChatCompletion.create(
+                model="mixtral-8x7b-32768",
+                messages=[
+                    {"role": "system", "content": "You are a global sourcing and supply chain advisor, helping users find suppliers, vendors, and sourcing hubs for their selected product categories and countries."},
+                    {"role": "user", "content": user_question}
+                ]
+            )
+
+            st.success(response['choices'][0]['message']['content'])
+
+        except Exception as e:
+            st.error(f"⚠️ Failed to get a response: {e}")
+    else:
+        st.warning("Please enter your Groq API key above to use the Vendor Sourcing Advisor.")
+
+
+
+
 # --- About Section
 st.markdown("---")
 with st.expander("ℹ️ About this App"):
