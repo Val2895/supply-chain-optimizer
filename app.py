@@ -185,66 +185,6 @@ if st.session_state.opt_inputs.get("run_optimization"):
         else:
             st.warning("❗ No better alternative countries found.")
 
-# --- Vendor Discovery Section using Groq
-st.markdown("---")
-st.subheader("🤖 Vendor Sourcing Advisor (Powered by Groq AI)")
-
-st.caption("Ask anything like 'Find me apparel manufacturers in Vietnam' or 'Where can I source electronics in Mexico?'")
-
-user_question = st.text_input("Ask your sourcing question:")
-
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
-if user_question:
-    loading_message = st.empty()
-    loading_message.info("Generating answer... Please wait a few seconds!")
-
-    try:
-        groq_api_key = st.secrets["GROQ_API_KEY"]
-    except KeyError:
-        groq_api_key = st.text_input("🔑 Enter your Groq API Key:", type="password")
-
-    if groq_api_key:
-        openai.api_key = groq_api_key
-        openai.api_base = "https://api.groq.com/openai/v1"
-
-       try:
-    response = openai.ChatCompletion.create(
-        model="llama3-70b-8192",
-        messages=[
-            {"role": "system", "content": "You are a global sourcing and supply chain advisor."},
-            {"role": "user", "content": user_question}
-        ]
-    )
-    answer = response['choices'][0]['message']['content']
-    loading_message.empty()
-    st.markdown(answer)
-
-    # Save to chat history
-    st.session_state.chat_history.append({"user": user_question, "assistant": answer})
-
-except Exception as e:
-    loading_message.empty()
-    st.error(f"⚠️ Failed to get a response: {e}")
-
-except Exception as e:
-    loading_message.empty()
-    st.error(f"⚠️ Failed to get a response: {e}")
-
-    else:
-        st.warning("Please enter your Groq API key above to use the Vendor Sourcing Advisor.")
-
-# --- Show Chat History
-if st.session_state.chat_history:
-    with st.expander("🗂️ Chat History", expanded=True):
-        for entry in reversed(st.session_state.chat_history):
-            st.markdown(f"**🧑 You:** {entry['user']}")
-            st.markdown(f"**🤖 Advisor:** {entry['assistant']}")
-            st.divider()
-
-
-
 # --- About Section
 st.markdown("---")
 with st.expander("ℹ️ About this App"):
@@ -273,3 +213,56 @@ with st.expander("ℹ️ About this App"):
     This tool is intended for informational and strategic planning purposes only and does not constitute legal or regulatory advice.
     """)
     st.caption("Created with care for the global sourcing community.")
+
+# --- Vendor Discovery Section using Groq
+st.markdown("---")
+st.subheader("🤖 Vendor Sourcing Advisor (Powered by Groq AI)")
+
+st.caption("Ask anything like 'Find me apparel manufacturers in Vietnam' or 'Where can I source electronics in Mexico?'")
+
+user_question = st.text_input("Ask your sourcing question:")
+
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+if user_question:
+    loading_message = st.empty()
+    loading_message.info("Generating answer... Please wait a few seconds!")
+
+    try:
+        groq_api_key = st.secrets["GROQ_API_KEY"]
+    except KeyError:
+        groq_api_key = st.text_input("🔑 Enter your Groq API Key:", type="password")
+
+    if groq_api_key:
+        openai.api_key = groq_api_key
+        openai.api_base = "https://api.groq.com/openai/v1"
+
+        try:
+            response = openai.ChatCompletion.create(
+                model="llama3-70b-8192",
+                messages=[
+                    {"role": "system", "content": "You are a global sourcing and supply chain advisor, helping users find suppliers, vendors, and sourcing hubs."},
+                    {"role": "user", "content": user_question}
+                ]
+            )
+            answer = response['choices'][0]['message']['content']
+            loading_message.empty()
+            st.markdown(answer)
+
+            # Save to chat history
+            st.session_state.chat_history.append({"user": user_question, "assistant": answer})
+
+        except Exception as e:
+            loading_message.empty()
+            st.error(f"⚠️ Failed to get a response: {e}")
+    else:
+        st.warning("Please enter your Groq API key above to use the Vendor Sourcing Advisor.")
+
+# --- Show Chat History
+if st.session_state.chat_history:
+    with st.expander("🗂️ Chat History", expanded=True):
+        for entry in reversed(st.session_state.chat_history):
+            st.markdown(f"**🧑 You:** {entry['user']}")
+            st.markdown(f"**🤖 Advisor:** {entry['assistant']}")
+            st.divider()
