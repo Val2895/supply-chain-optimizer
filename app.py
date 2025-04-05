@@ -207,7 +207,7 @@ if user_question:
 
         try:
             response = openai.ChatCompletion.create(
-                model="mixtral-8x7b",  # 👈 UPDATED MODEL HERE
+                model="llama3-70b-8192",  # ✅ Correct working model
                 messages=[
                     {"role": "system", "content": "You are a global sourcing and supply chain advisor, helping users find suppliers, vendors, and sourcing hubs for their selected product categories and countries."},
                     {"role": "user", "content": user_question}
