@@ -124,12 +124,15 @@ if st.session_state.opt_inputs.get("run_optimization"):
 
     st.subheader("📈 Current Tariff Situation")
 
-    if clean_category in excluded_categories:
-        st.success(f"✅ {clean_category} is excluded from new tariff rules. No optimization needed.")
-        st.markdown("""
-        **Note:** Semiconductors are excluded from the new April 2025 reciprocal tariffs.  
-        Existing base tariffs (if any) under prior HS Code rules may still apply at low rates (typically 0–4%) depending on specific product classification.
-        """)
+if clean_category in excluded_categories:
+    st.success(f"✅ {clean_category} is excluded from new tariff rules. No optimization needed.")
+    st.markdown(f"""
+    **Note:** {clean_category} is excluded from the new April 2025 reciprocal tariffs.  
+    Existing base tariffs (if any) under previous HS Code rules may still apply, typically at low rates (around 0–4%).  
+    In rare cases, certain subcategories (such as processed goods or specific finished materials) may have slightly higher duties.  
+    Please verify specific product classifications with a trade compliance advisor before making sourcing decisions.
+    """)
+
     else:
         output_rows = []
         for alt_country in annex_tariffs.keys():
