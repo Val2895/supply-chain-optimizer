@@ -125,99 +125,78 @@ if st.session_state.opt_inputs.get("run_optimization"):
     st.subheader("📈 Current Tariff Situation")
 
     if clean_category in excluded_categories:
-        st.success(f"✅ {clean_category} is excluded from new tariff rules.")
+        st.success(f"✅ {clean_category} is excluded from new tariff rules. No optimization needed.")
+        st.markdown("""
+        **Note:** Semiconductors are excluded from the new April 2025 reciprocal tariffs.  
+        Existing base tariffs (if any) under prior HS Code rules may still apply at low rates (typically 0–4%) depending on specific product classification.
+        """)
+    else:
+        output_rows = []
+        for alt_country in annex_tariffs.keys():
+            alt_tariff = get_tariff(alt_country)
+            savings_percentage = current_tariff - alt_tariff
+            if alt_country == inputs["country"] or savings_percentage <= 0:
+                continue
+            savings_amount = (savings_percentage / 100) * inputs["import_value"]
+            strength = get_supply_strength(alt_country, clean_category)
 
-    output_rows = []
-    for alt_country in annex_tariffs.keys():
-        alt_tariff = get_tariff(alt_country)
-        savings_percentage = current_tariff - alt_tariff
-        if alt_country == inputs["country"] or savings_percentage <= 0:
-            continue
-        savings_amount = (savings_percentage / 100) * inputs["import_value"]
-        strength = get_supply_strength(alt_country, clean_category)
+            if clean_category in excluded_categories or (alt_country == "Canada" and alt_tariff == 0):
+                excluded_status = "✅ Excluded"
+            else:
+                excluded_status = "❗ Subject to Tariffs"
 
-        if clean_category in excluded_categories or (alt_country == "Canada" and alt_tariff == 0):
-            excluded_status = "✅ Excluded"
+            output_rows.append({
+                "Alternative Country": alt_country,
+                "New Tariff %": alt_tariff,
+                "Saving %": round(savings_percentage, 1),
+                "Estimated Annual Savings ($)": savings_amount,
+                "Supply Strength": strength,
+                "Tariff Status": excluded_status
+            })
+
+        if output_rows:
+            result_df = pd.DataFrame(output_rows)
+            strength_priority = {"High": 1, "Medium": 2, "Low": 3}
+            result_df['Priority'] = result_df['Supply Strength'].map(strength_priority)
+            result_df = result_df.sort_values(by=['Priority', 'Saving %'], ascending=[True, False])
+
+            st.subheader("📊 All Alternative Country Recommendations")
+            st.dataframe(result_df.style.format({
+                "Estimated Annual Savings ($)": "${:,.2f}",
+                "Saving %": "{:.1f}%"
+            }))
+
+            st.download_button("📥 Download Results as Excel", data=convert_df(result_df), file_name="tariff_optimization_full.xlsx")
+
+            top5_df = result_df.head(5)
+
+            st.subheader("💰 Estimated Savings by Top 5 Countries")
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.barh(top5_df['Alternative Country'], top5_df['Estimated Annual Savings ($)'], color='skyblue')
+            ax.set_xlabel('Estimated Annual Savings ($)')
+            ax.set_title('Top 5 Savings Opportunity by Country')
+            ax.invert_yaxis()
+            st.pyplot(fig)
+
+            top_option = top5_df.iloc[0]
+            st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
         else:
-            excluded_status = "❗ Subject to Tariffs"
-
-        output_rows.append({
-            "Alternative Country": alt_country,
-            "New Tariff %": alt_tariff,
-            "Saving %": round(savings_percentage, 1),
-            "Estimated Annual Savings ($)": savings_amount,
-            "Supply Strength": strength,
-            "Tariff Status": excluded_status
-        })
-
-    if output_rows:
-        result_df = pd.DataFrame(output_rows)
-        strength_priority = {"High": 1, "Medium": 2, "Low": 3}
-        result_df['Priority'] = result_df['Supply Strength'].map(strength_priority)
-        result_df = result_df.sort_values(by=['Priority', 'Saving %'], ascending=[True, False])
-
-        st.subheader("📊 All Alternative Country Recommendations")
-        st.dataframe(result_df.style.format({
-            "Estimated Annual Savings ($)": "${:,.2f}",
-            "Saving %": "{:.1f}%"
-        }))
-
-        st.download_button("📥 Download Results as Excel", data=convert_df(result_df), file_name="tariff_optimization_full.xlsx")
-
-        top5_df = result_df.head(5)
-
-        st.subheader("💰 Estimated Savings by Top 5 Countries")
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.barh(top5_df['Alternative Country'], top5_df['Estimated Annual Savings ($)'], color='skyblue')
-        ax.set_xlabel('Estimated Annual Savings ($)')
-        ax.set_title('Top 5 Savings Opportunity by Country')
-        ax.invert_yaxis()
-        st.pyplot(fig)
-
-        top_option = top5_df.iloc[0]
-        st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
-
-# --- Vendor Chat Section
-st.subheader("🚀 Vendor Sourcing Assistance")
-
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
-with st.form("vendor_chat_form"):
-    vendor_prompt = st.text_input("Ask a sourcing question (example: 'Find furniture vendors in Vietnam'):")
-    submitted = st.form_submit_button("Search")
-
-    if submitted and vendor_prompt:
-        api_key = st.secrets["GROQ_API_KEY"]
-        openai.api_key = api_key
-        openai.api_base = "https://api.groq.com/openai/v1"
-
-        try:
-            response = openai.ChatCompletion.create(
-                model="llama3-70b-8192",
-                messages=[
-                    {"role": "system", "content": "You are a global sourcing expert helping businesses find vendors and platforms for international trade."},
-                    {"role": "user", "content": vendor_prompt},
-                ],
-                temperature=0.3,
-                max_tokens=1000
-            )
-            answer = response['choices'][0]['message']['content']
-            st.session_state.chat_history.append((vendor_prompt, answer))
-        except Exception as e:
-            st.error(f"⚠️ Failed to get a response: {str(e)}")
-
-# Display full chat history
-if st.session_state.chat_history:
-    for idx, (q, a) in enumerate(reversed(st.session_state.chat_history)):
-        with st.expander(f"💬 {q}", expanded=False):
-            st.markdown(a)
+            st.warning("❗ No better alternative countries found.")
 
 # --- About Section
 st.markdown("---")
 with st.expander("ℹ️ About this App"):
     st.write("""
-    This tool helps businesses optimize their global sourcing strategies by analyzing tariff impacts introduced by the 2025 US trade policy updates.
-    It highlights potential savings, evaluates supplier ecosystem strength, and provides AI-powered advisory to help companies make smarter supply chain moves.
+    **Supply Chain Tariff Optimization AI** is a smart platform designed to help businesses navigate the evolving global trade environment, especially in light of the 2025 US tariff updates.
+
+    Built to empower sourcing and procurement leaders, the tool analyzes tariff impacts, identifies alternative sourcing opportunities, estimates potential savings, and offers AI-powered vendor discovery — all within a clean, executive-ready experience.
+
+    **About the Creator:**
+
+    Vishal Singh — a passionate Supply Chain Professional and current Graduate Student at **SUNY Buffalo** — developed this platform to bridge real-world trade challenges with modern AI capabilities. 
+
+    His mission is to help companies make smarter sourcing decisions, turn tariff disruptions into competitive advantage, and embrace AI in practical, business-driven ways.
+
+    **Powered by:** Groq AI + Streamlit
     """)
-    st.caption("Powered by Groq AI + Streamlit")
+    st.caption("Created with care for the global sourcing community.")
