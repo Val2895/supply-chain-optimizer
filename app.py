@@ -27,7 +27,7 @@ annex_tariffs = {
     'Thailand': 36, 'European Union': 20, 'Canada': 0, 'Hong Kong': 34
 }
 
-# --- Product Categories (Corrected)
+# --- Product Categories
 products = {
     'Apparel': ['Cotton/Natural', 'Synthetic'],
     'Electronics': ['Chips', 'Consumer Devices'],
@@ -115,7 +115,7 @@ with st.sidebar:
             "run_optimization": True
         }
 
-# --- Chat Reset Logic BEFORE Groq Chat Loads
+# --- Chat Reset Logic
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
@@ -128,10 +128,9 @@ current_inputs = {
     "country": country
 }
 
-if current_inputs != st.session_state.last_inputs or st.session_state.opt_inputs.get("run_optimization", False):
+if current_inputs != st.session_state.last_inputs:
     st.session_state.chat_history = []
     st.session_state.last_inputs = current_inputs
-    st.session_state.opt_inputs["run_optimization"] = False
 
 # --- Optimization Logic
 if st.session_state.opt_inputs.get("run_optimization"):
@@ -203,11 +202,14 @@ if st.session_state.opt_inputs.get("run_optimization"):
         else:
             st.warning("❗ No better alternative countries found.")
 
-# --- Vendor Advisor (Groq Chat)
+    # ✅ Reset run_optimization
+    st.session_state.opt_inputs["run_optimization"] = False
+
+# --- Vendor Sourcing (Groq Chat)
 st.markdown("---")
 st.subheader("🤖 Vendor Sourcing Advisor (Powered by Groq AI)")
 
-st.caption("Ask anything like 'Find me apparel manufacturers in Vietnam' or 'Where can I source electronics in Mexico?'")
+st.caption("Ask questions like 'Find me apparel manufacturers in Vietnam' or 'Where can I source electronics in Mexico?'")
 
 user_question = st.text_input("Ask your sourcing question:")
 
@@ -248,7 +250,7 @@ if user_question:
             loading_message.empty()
             st.error(f"⚠️ Failed to get a response: {e}")
     else:
-        st.warning("Please enter your Groq API key above to use the Vendor Sourcing Advisor.")
+        st.warning("Please enter your Groq API key above to use Vendor Sourcing Advisor.")
 
 if st.session_state.chat_history:
     st.subheader("🗂️ Previous Conversations")
@@ -261,7 +263,7 @@ if st.session_state.chat_history:
 st.markdown("---")
 with st.expander("ℹ️ About this App"):
     st.write("""
-    **Supply Chain Tariff Optimization AI** is a smart platform designed to help businesses navigate the evolving global trade environment, especially in light of the 2025 US tariff updates.
+    **Supply Chain Tariff Optimization AI** helps businesses adapt to the 2025 global tariff shifts.
 
     **About the Creator:**
 
