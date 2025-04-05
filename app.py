@@ -93,6 +93,8 @@ with st.sidebar:
 
     if "opt_inputs" not in st.session_state:
         st.session_state.opt_inputs = {}
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
 
     category = st.selectbox("Select Product Category:", sorted(products.keys()), key="category")
     subcategory = None
@@ -105,6 +107,7 @@ with st.sidebar:
         st.caption(f"_In Words: {number_to_words(annual_import_value)}_")
     individual_shipment_value = st.number_input("Individual Shipment Value ($) (Optional):", min_value=0, step=100, key="shipment_value")
 
+    # When clicking "Optimize Supply Chain", reset chat history as well
     if st.button("🔍 Optimize Supply Chain"):
         st.session_state.opt_inputs = {
             "category": category,
@@ -114,11 +117,9 @@ with st.sidebar:
             "shipment_value": individual_shipment_value,
             "run_optimization": True
         }
+        st.session_state.chat_history = []  # Reset chat history
 
-# --- Chat Reset Logic
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
+# --- Chat Reset Logic Based on Input Changes
 if "last_inputs" not in st.session_state:
     st.session_state.last_inputs = {"category": None, "subcategory": None, "country": None}
 
@@ -134,7 +135,6 @@ if current_inputs != st.session_state.last_inputs:
 
 # --- Optimization Logic
 if st.session_state.opt_inputs.get("run_optimization"):
-
     inputs = st.session_state.opt_inputs
     clean_category = inputs["category"].split(' (')[0]
     current_tariff = get_tariff(inputs["country"])
@@ -149,6 +149,7 @@ if st.session_state.opt_inputs.get("run_optimization"):
         In rare cases, specific subcategories (such as processed goods or specific finished materials) may have slightly higher duties.  
         Please verify specific product classifications with a trade compliance advisor before making sourcing decisions.
         """)
+        st.session_state.optimization_display = False
     else:
         output_rows = []
         for alt_country in annex_tariffs.keys():
@@ -159,7 +160,8 @@ if st.session_state.opt_inputs.get("run_optimization"):
             savings_amount = (savings_percentage / 100) * inputs["import_value"]
             strength = get_supply_strength(alt_country, clean_category)
 
-            if clean_category in excluded_categories or (alt_country == "Canada" and alt_tariff == 0):
+            # Only check Canada for its special case here
+            if alt_country == "Canada" and alt_tariff == 0:
                 excluded_status = "✅ Excluded"
             else:
                 excluded_status = "❗ Subject to Tariffs"
@@ -179,36 +181,43 @@ if st.session_state.opt_inputs.get("run_optimization"):
             result_df['Priority'] = result_df['Supply Strength'].map(strength_priority)
             result_df = result_df.sort_values(by=['Priority', 'Saving %'], ascending=[True, False])
 
-            st.subheader("📊 All Alternative Country Recommendations")
-            st.dataframe(result_df.style.format({
-                "Estimated Annual Savings ($)": "${:,.2f}",
-                "Saving %": "{:.1f}%"
-            }))
-
-            st.download_button("📥 Download Results as Excel", data=convert_df(result_df), file_name="tariff_optimization_full.xlsx")
-
+            # Save optimization results in session state to persist them
+            st.session_state.optimization_result_df = result_df
             top5_df = result_df.head(5)
-
-            st.subheader("💰 Estimated Savings by Top 5 Countries")
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.barh(top5_df['Alternative Country'], top5_df['Estimated Annual Savings ($)'], color='skyblue')
-            ax.set_xlabel('Estimated Annual Savings ($)')
-            ax.set_title('Top 5 Savings Opportunity by Country')
-            ax.invert_yaxis()
-            st.pyplot(fig)
-
+            st.session_state.optimization_top5_df = top5_df
             top_option = top5_df.iloc[0]
-            st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
+            st.session_state.optimization_top_option = top_option
+            st.session_state.optimization_display = True
         else:
             st.warning("❗ No better alternative countries found.")
+            st.session_state.optimization_display = False
 
-    # ✅ Reset run_optimization
+    # Reset the flag after processing
     st.session_state.opt_inputs["run_optimization"] = False
+
+# --- Display Optimization Results (Persisting Visualization)
+if st.session_state.get("optimization_display", False):
+    st.subheader("📊 All Alternative Country Recommendations")
+    st.dataframe(st.session_state.optimization_result_df.style.format({
+        "Estimated Annual Savings ($)": "${:,.2f}",
+        "Saving %": "{:.1f}%"
+    }))
+    st.download_button("📥 Download Results as Excel", data=convert_df(st.session_state.optimization_result_df), file_name="tariff_optimization_full.xlsx")
+
+    st.subheader("💰 Estimated Savings by Top 5 Countries")
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.barh(st.session_state.optimization_top5_df['Alternative Country'], st.session_state.optimization_top5_df['Estimated Annual Savings ($)'])
+    ax.set_xlabel('Estimated Annual Savings ($)')
+    ax.set_title('Top 5 Savings Opportunity by Country')
+    ax.invert_yaxis()
+    st.pyplot(fig)
+
+    top_option = st.session_state.optimization_top_option
+    st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
 
 # --- Vendor Sourcing (Groq Chat)
 st.markdown("---")
 st.subheader("🤖 Vendor Sourcing Advisor (Powered by Groq AI)")
-
 st.caption("Ask questions like 'Find me apparel manufacturers in Vietnam' or 'Where can I source electronics in Mexico?'")
 
 user_question = st.text_input("Ask your sourcing question:")
