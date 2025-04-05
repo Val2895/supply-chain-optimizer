@@ -88,48 +88,55 @@ def convert_df(df):
     return buffer.getvalue()
 
 # --- Sidebar Inputs
-st.sidebar.header("📋 Input Your Data")
+with st.sidebar:
+    st.header("📋 Input Your Data")
 
-category = st.sidebar.selectbox("Select Product Category:", sorted(products.keys()))
-subcategory = None
-if products[category]:
-    subcategory = st.sidebar.selectbox("Select Subcategory:", sorted(products[category]))
+    if "opt_inputs" not in st.session_state:
+        st.session_state.opt_inputs = {}
 
-country = st.sidebar.selectbox("Select Current Import Country:", sorted(list(annex_tariffs.keys())))
+    category = st.selectbox("Select Product Category:", sorted(products.keys()), key="category")
+    subcategory = None
+    if products[category]:
+        subcategory = st.selectbox("Select Subcategory:", sorted(products[category]), key="subcategory")
 
-annual_import_value = st.sidebar.number_input("Annual Import Value ($):", min_value=0, step=1000, value=100000)
-if annual_import_value:
-    st.sidebar.caption(f"_In Words: {number_to_words(annual_import_value)}_")
+    country = st.selectbox("Select Current Import Country:", sorted(list(annex_tariffs.keys())), key="country")
+    annual_import_value = st.number_input("Annual Import Value ($):", min_value=0, step=1000, value=100000, key="import_value")
+    if annual_import_value:
+        st.caption(f"_In Words: {number_to_words(annual_import_value)}_")
+    individual_shipment_value = st.number_input("Individual Shipment Value ($) (Optional):", min_value=0, step=100, key="shipment_value")
 
-individual_shipment_value = st.sidebar.number_input("Individual Shipment Value ($) (Optional):", min_value=0, step=100)
+    if st.button("🔍 Optimize Supply Chain"):
+        st.session_state.opt_inputs = {
+            "category": category,
+            "subcategory": subcategory,
+            "country": country,
+            "import_value": annual_import_value,
+            "shipment_value": individual_shipment_value,
+            "run_optimization": True
+        }
 
-search = st.sidebar.button("🔍 Optimize Supply Chain")
+# --- Optimization Logic
+if st.session_state.opt_inputs.get("run_optimization"):
 
-# --- Main Panel Outputs
-if search:
+    inputs = st.session_state.opt_inputs
+    clean_category = inputs["category"].split(' (')[0]
+    current_tariff = get_tariff(inputs["country"])
 
     st.subheader("📈 Current Tariff Situation")
-
-    clean_category = category.split(' (')[0]
-    current_tariff = get_tariff(country)
 
     if clean_category in excluded_categories:
         st.success(f"✅ {clean_category} is excluded from new tariff rules.")
 
     output_rows = []
     for alt_country in annex_tariffs.keys():
-        if alt_country == country:
-            continue
-
         alt_tariff = get_tariff(alt_country)
         savings_percentage = current_tariff - alt_tariff
-        if savings_percentage <= 0:
+        if alt_country == inputs["country"] or savings_percentage <= 0:
             continue
-        savings_amount = (savings_percentage / 100) * annual_import_value
+        savings_amount = (savings_percentage / 100) * inputs["import_value"]
         strength = get_supply_strength(alt_country, clean_category)
 
-        # --- Exclusion logic fixed
-        if clean_category in excluded_categories or alt_country in ["Canada", "Mexico"] and alt_tariff == 0:
+        if clean_category in excluded_categories or (alt_country == "Canada" and alt_tariff == 0):
             excluded_status = "✅ Excluded"
         else:
             excluded_status = "❗ Subject to Tariffs"
@@ -149,15 +156,15 @@ if search:
         result_df['Priority'] = result_df['Supply Strength'].map(strength_priority)
         result_df = result_df.sort_values(by=['Priority', 'Saving %'], ascending=[True, False])
 
-        top5_df = result_df.head(5)
-
-        st.subheader("📊 Alternative Country Recommendations (Top 5)")
-        st.dataframe(top5_df.style.format({
+        st.subheader("📊 All Alternative Country Recommendations")
+        st.dataframe(result_df.style.format({
             "Estimated Annual Savings ($)": "${:,.2f}",
             "Saving %": "{:.1f}%"
         }))
 
-        st.download_button("📥 Download Results as Excel", data=convert_df(top5_df), file_name="tariff_optimization_top5.xlsx")
+        st.download_button("📥 Download Results as Excel", data=convert_df(result_df), file_name="tariff_optimization_full.xlsx")
+
+        top5_df = result_df.head(5)
 
         st.subheader("💰 Estimated Savings by Top 5 Countries")
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -167,48 +174,44 @@ if search:
         ax.invert_yaxis()
         st.pyplot(fig)
 
-        # Top Recommendation
         top_option = top5_df.iloc[0]
         st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
 
-        # --- Vendor Help Section
-        st.subheader("🚀 Vendor Sourcing Assistance")
+# --- Vendor Chat Section
+st.subheader("🚀 Vendor Sourcing Assistance")
 
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
 
-        with st.form("vendor_chat_form"):
-            vendor_prompt = st.text_input("Ask a sourcing question (example: 'Find furniture vendors in Vietnam'):")
-            submitted = st.form_submit_button("Search")
+with st.form("vendor_chat_form"):
+    vendor_prompt = st.text_input("Ask a sourcing question (example: 'Find furniture vendors in Vietnam'):")
+    submitted = st.form_submit_button("Search")
 
-            if submitted and vendor_prompt:
-                api_key = st.secrets["GROQ_API_KEY"]
-                openai.api_key = api_key
-                openai.api_base = "https://api.groq.com/openai/v1"
+    if submitted and vendor_prompt:
+        api_key = st.secrets["GROQ_API_KEY"]
+        openai.api_key = api_key
+        openai.api_base = "https://api.groq.com/openai/v1"
 
-                try:
-                    response = openai.ChatCompletion.create(
-                        model="llama3-70b-8192",
-                        messages=[
-                            {"role": "system", "content": "You are a global sourcing expert helping businesses find vendors and platforms for international trade."},
-                            {"role": "user", "content": vendor_prompt},
-                        ],
-                        temperature=0.3,
-                        max_tokens=1000
-                    )
-                    answer = response['choices'][0]['message']['content']
-                    st.session_state.chat_history.append((vendor_prompt, answer))
-                except Exception as e:
-                    st.error(f"⚠️ Failed to get a response: {str(e)}")
+        try:
+            response = openai.ChatCompletion.create(
+                model="llama3-70b-8192",
+                messages=[
+                    {"role": "system", "content": "You are a global sourcing expert helping businesses find vendors and platforms for international trade."},
+                    {"role": "user", "content": vendor_prompt},
+                ],
+                temperature=0.3,
+                max_tokens=1000
+            )
+            answer = response['choices'][0]['message']['content']
+            st.session_state.chat_history.append((vendor_prompt, answer))
+        except Exception as e:
+            st.error(f"⚠️ Failed to get a response: {str(e)}")
 
-        # Display full chat history
-        if st.session_state.chat_history:
-            for idx, (q, a) in enumerate(reversed(st.session_state.chat_history)):
-                with st.expander(f"💬 {q}", expanded=False):
-                    st.markdown(a)
-
-    else:
-        st.warning("❗ No better alternative countries found.")
+# Display full chat history
+if st.session_state.chat_history:
+    for idx, (q, a) in enumerate(reversed(st.session_state.chat_history)):
+        with st.expander(f"💬 {q}", expanded=False):
+            st.markdown(a)
 
 # --- About Section
 st.markdown("---")
