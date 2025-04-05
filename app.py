@@ -185,6 +185,10 @@ if st.session_state.opt_inputs.get("run_optimization"):
         else:
             st.warning("❗ No better alternative countries found.")
 
+
+
+
+
 # --- Vendor Discovery Section (Groq AI Chat)
 st.markdown("---")
 st.subheader("🤖 Vendor Sourcing Advisor (Powered by Groq AI)")
@@ -195,13 +199,7 @@ st.caption("Ask anything like 'Find me apparel manufacturers in Vietnam' or 'Whe
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# Show previous chat history
-for entry in st.session_state.chat_history:
-    st.markdown(f"**🧑 You:** {entry['user']}")
-    st.markdown(f"**🤖 Advisor:** {entry['assistant']}")
-    st.divider()
-
-# New question input
+# --- New Chat Input FIRST
 user_question = st.text_input("Ask your sourcing question:")
 
 if user_question:
@@ -228,19 +226,30 @@ if user_question:
             answer = response['choices'][0]['message']['content']
             loading_message.empty()
 
-            # Show instantly
+            # Immediately show the latest answer nicely
             st.markdown(f"**🧑 You:** {user_question}")
             st.markdown(f"**🤖 Advisor:** {answer}")
             st.divider()
 
-            # Save to chat history
-            st.session_state.chat_history.append({"user": user_question, "assistant": answer})
+            # Save this chat to history
+            st.session_state.chat_history.append({
+                "user": user_question,
+                "assistant": answer
+            })
 
         except Exception as e:
             loading_message.empty()
             st.error(f"⚠️ Failed to get a response: {e}")
     else:
         st.warning("Please enter your Groq API key above to use the Vendor Sourcing Advisor.")
+
+# --- Show Past Chats in Expanders BELOW
+if st.session_state.chat_history:
+    st.subheader("🗂️ Previous Conversations")
+    for i, entry in enumerate(reversed(st.session_state.chat_history), start=1):
+        with st.expander(f"Chat #{i}: {entry['user']}"):
+            st.markdown(f"**🧑 You:** {entry['user']}")
+            st.markdown(f"**🤖 Advisor:** {entry['assistant']}")
 
 # --- About the App
 st.markdown("---")
