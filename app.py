@@ -124,15 +124,14 @@ if st.session_state.opt_inputs.get("run_optimization"):
 
     st.subheader("📈 Current Tariff Situation")
 
-if clean_category in excluded_categories:
-    st.success(f"✅ {clean_category} is excluded from new tariff rules. No optimization needed.")
-    st.markdown(f"""
-    **Note:** {clean_category} is excluded from the new April 2025 reciprocal tariffs.  
-    Existing base tariffs (if any) under previous HS Code rules may still apply, typically at low rates (around 0–4%).  
-    In rare cases, certain subcategories (such as processed goods or specific finished materials) may have slightly higher duties.  
-    Please verify specific product classifications with a trade compliance advisor before making sourcing decisions.
-    """)
-
+    if clean_category in excluded_categories:
+        st.success(f"✅ {clean_category} is excluded from new tariff rules. No optimization needed.")
+        st.markdown(f"""
+        **Note:** {clean_category} is excluded from the new April 2025 reciprocal tariffs.  
+        Existing base tariffs (if any) under previous HS Code rules may still apply, typically at low rates (around 0–4%).  
+        In rare cases, certain subcategories (such as processed goods or specific finished materials) may have slightly higher duties.  
+        Please verify specific product classifications with a trade compliance advisor before making sourcing decisions.
+        """)
     else:
         output_rows = []
         for alt_country in annex_tariffs.keys():
@@ -201,5 +200,16 @@ with st.expander("ℹ️ About this App"):
     His mission is to help companies make smarter sourcing decisions, turn tariff disruptions into competitive advantage, and embrace AI in practical, business-driven ways.
 
     **Powered by:** Groq AI + Streamlit
+
+    ---
+    🔒 **Important Disclaimer:**
+
+    The Supply Chain Tariff Optimization AI tool provides estimated tariff impacts and sourcing recommendations based on the April 2025 US trade policy updates and public HS Code classifications.
+
+    While excluded product categories (e.g., Food, Medicine, Semiconductors) are generally not subject to the new reciprocal tariffs, certain goods may still be subject to existing base tariffs under prior trade rules, typically ranging from 0% to 4%. In rare cases, specific subcategories (e.g., finished goods, processed materials) may incur slightly higher duties.
+
+    Users are encouraged to verify specific tariff rates for their products with customs brokers or trade compliance experts before finalizing sourcing decisions.
+
+    This tool is intended for informational and strategic planning purposes only and does not constitute legal or regulatory advice.
     """)
     st.caption("Created with care for the global sourcing community.")
