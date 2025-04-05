@@ -27,7 +27,7 @@ annex_tariffs = {
     'Thailand': 36, 'European Union': 20, 'Canada': 0, 'Hong Kong': 34
 }
 
-# --- Product Categories
+# --- Product Categories (Corrected)
 products = {
     'Apparel': ['Cotton/Natural', 'Synthetic'],
     'Electronics': ['Chips', 'Consumer Devices'],
@@ -40,7 +40,6 @@ products = {
     'Medicine': [],
     'Energy/Critical Minerals': ['Lithium', 'Cobalt', 'Rare Earths'],
 }
-
 
 excluded_categories = [
     'Food', 'Medicine', 'Humanitarian Goods', 'Steel/Aluminum',
@@ -107,18 +106,15 @@ with st.sidebar:
     individual_shipment_value = st.number_input("Individual Shipment Value ($) (Optional):", min_value=0, step=100, key="shipment_value")
 
     if st.button("🔍 Optimize Supply Chain"):
-    st.session_state.chat_history = []  
-    st.session_state.opt_inputs = {
-        "category": category,
-        "subcategory": subcategory,
-        "country": country,
-        "import_value": annual_import_value,
-        "shipment_value": individual_shipment_value,
-        "run_optimization": True
-    }
-
-
-
+        st.session_state.chat_history = []  # Reset Groq Chat History on New Search
+        st.session_state.opt_inputs = {
+            "category": category,
+            "subcategory": subcategory,
+            "country": country,
+            "import_value": annual_import_value,
+            "shipment_value": individual_shipment_value,
+            "run_optimization": True
+        }
 
 # --- Auto Reset Chat History if Inputs Change
 if "last_inputs" not in st.session_state:
@@ -131,8 +127,8 @@ current_inputs = {
 }
 
 if current_inputs != st.session_state.last_inputs:
-    st.session_state.chat_history = []  # Clear old chat
-    st.session_state.last_inputs = current_inputs  # Update
+    st.session_state.chat_history = []
+    st.session_state.last_inputs = current_inputs
 
 # --- Optimization Logic
 if st.session_state.opt_inputs.get("run_optimization"):
@@ -148,7 +144,7 @@ if st.session_state.opt_inputs.get("run_optimization"):
         st.markdown(f"""
         **Note:** {clean_category} is excluded from the new April 2025 reciprocal tariffs.  
         Existing base tariffs (if any) under previous HS Code rules may still apply, typically at low rates (around 0–4%).  
-        In rare cases, certain subcategories (such as processed goods or specific finished materials) may have slightly higher duties.  
+        In rare cases, specific subcategories (such as processed goods or specific finished materials) may have slightly higher duties.  
         Please verify specific product classifications with a trade compliance advisor before making sourcing decisions.
         """)
     else:
@@ -203,6 +199,9 @@ if st.session_state.opt_inputs.get("run_optimization"):
             st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']}, {top_option['Tariff Status']})")
         else:
             st.warning("❗ No better alternative countries found.")
+
+
+
 
 
 # --- Vendor Discovery Section (Groq AI Chat)
