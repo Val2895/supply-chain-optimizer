@@ -11,7 +11,7 @@ from io import BytesIO
 theme_config = toml.load('streamlit_config.toml')
 
 st.set_page_config(
-    page_title="Supply Chain Tariff Optimization AI",
+    page_title="Supply Chain Tariff Optimization & AI Sourcing Advisor",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -264,6 +264,6 @@ with st.expander("ℹ️ About this App"):
 
     Vishal Singh — Supply Chain Professional, Graduate Student at **SUNY Buffalo**.
 
-    **Powered by:** Groq AI + Streamlit
+    **Powered by:** Groq AI (using LLaMA 3 model) + Streamlit
     """)
     st.caption("Created with care for the global sourcing community.")
