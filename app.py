@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import requests
-import openai  # Groq uses OpenAI format
+import openai
 import toml
+import inflect
 from io import BytesIO
 
 # --- Load Theme Settings
@@ -16,7 +17,6 @@ st.set_page_config(
 )
 
 # --- Branding Header
-# st.image('branding/logo.png', width=180)  # Uncomment if using logo
 st.markdown("<h1 style='text-align: center; color: #003366;'>Supply Chain Tariff Optimization AI</h1>", unsafe_allow_html=True)
 st.caption("Helping you source smarter in a shifting trade landscape — Powered by Groq AI")
 
@@ -52,23 +52,17 @@ supply_strength_mapping = {
     ('China', 'Apparel'): 'High', ('Vietnam', 'Apparel'): 'High',
     ('Bangladesh', 'Apparel'): 'High', ('India', 'Apparel'): 'High',
     ('Cambodia', 'Apparel'): 'Medium', ('Indonesia', 'Apparel'): 'Medium',
-
     ('China', 'Electronics'): 'High', ('South Korea', 'Electronics'): 'High',
     ('Malaysia', 'Electronics'): 'High', ('Taiwan', 'Electronics'): 'High',
     ('Thailand', 'Electronics'): 'Medium', ('Indonesia', 'Electronics'): 'Medium',
-
     ('China', 'Furniture'): 'High', ('Vietnam', 'Furniture'): 'High',
     ('Malaysia', 'Furniture'): 'Medium', ('Indonesia', 'Furniture'): 'Medium',
-
     ('China', 'Steel/Aluminum'): 'High', ('South Korea', 'Steel/Aluminum'): 'High',
     ('India', 'Steel/Aluminum'): 'Medium',
-
     ('China', 'Chemicals'): 'High', ('India', 'Chemicals'): 'High',
     ('Malaysia', 'Chemicals'): 'Medium',
-
     ('Mexico', 'Automotive Parts'): 'High', ('China', 'Automotive Parts'): 'High',
     ('South Korea', 'Automotive Parts'): 'High', ('Thailand', 'Automotive Parts'): 'Medium',
-
     ('Taiwan', 'Semiconductors'): 'High', ('South Korea', 'Semiconductors'): 'High',
     ('Malaysia', 'Semiconductors'): 'Medium', ('Singapore', 'Semiconductors'): 'Medium',
 }
@@ -86,6 +80,19 @@ def convert_df(df):
         df.to_excel(writer, index=False)
     return buffer.getvalue()
 
+def format_number_with_commas(value):
+    try:
+        return "{:,}".format(int(value))
+    except:
+        return value
+
+def number_to_words(value):
+    p = inflect.engine()
+    try:
+        return p.number_to_words(int(value)).capitalize() + " dollars"
+    except:
+        return ""
+
 # --- Sidebar Inputs
 st.sidebar.header("📋 Input Your Data")
 
@@ -95,7 +102,14 @@ if products[category]:
     subcategory = st.sidebar.selectbox("Select Subcategory:", sorted(products[category]))
 
 country = st.sidebar.selectbox("Select Current Import Country:", sorted(list(annex_tariffs.keys())))
-annual_import_value = st.sidebar.number_input("Annual Import Value ($):", value=100000, step=5000)
+
+annual_import_value = st.sidebar.text_input("Annual Import Value ($):", value="100000")
+formatted_value = format_number_with_commas(annual_import_value)
+amount_in_words = number_to_words(annual_import_value)
+
+st.sidebar.markdown(f"**Formatted:** {formatted_value}")
+st.sidebar.caption(f"_Entered amount: {amount_in_words}_")
+
 individual_shipment_value = st.sidebar.number_input("Individual Shipment Value ($) (Optional):", value=0, step=100)
 
 search = st.sidebar.button("🔍 Optimize Supply Chain")
@@ -104,11 +118,19 @@ search = st.sidebar.button("🔍 Optimize Supply Chain")
 if search:
 
     st.subheader("📈 Current Tariff Situation")
-    if category in excluded_categories:
-        st.success(f"✅ {category} is an excluded category. No new tariffs apply.")
+    clean_category = category.split(' (')[0]
+
+    if clean_category in excluded_categories:
+        st.success(f"✅ {clean_category} is excluded from new tariff rules.")
     else:
         if individual_shipment_value and country in ['China', 'Hong Kong'] and individual_shipment_value < 800:
             st.warning("⚠️ De Minimis eliminated for China/Hong Kong under $800 shipments. Full duties now apply.")
+
+        try:
+            annual_import_value_int = int(str(annual_import_value).replace(",", ""))
+        except:
+            st.error("Invalid import value entered.")
+            st.stop()
 
         current_tariff = get_tariff(country)
         st.info(f"Current Tariff from **{country}**: **{current_tariff}%**")
@@ -121,8 +143,8 @@ if search:
             savings_percentage = current_tariff - alt_tariff
             if savings_percentage <= 0:
                 continue
-            savings_amount = (savings_percentage / 100) * annual_import_value
-            strength = get_supply_strength(alt_country, category)
+            savings_amount = (savings_percentage / 100) * annual_import_value_int
+            strength = get_supply_strength(alt_country, clean_category)
 
             output_rows.append({
                 "Alternative Country": alt_country,
@@ -138,7 +160,6 @@ if search:
             result_df['Priority'] = result_df['Supply Strength'].map(strength_priority)
             result_df = result_df.sort_values(by=['Priority', 'Saving %'], ascending=[True, False])
 
-            # Top 5 countries only
             top5_df = result_df.head(5)
 
             st.subheader("📊 Alternative Country Recommendations")
@@ -157,56 +178,42 @@ if search:
             ax.invert_yaxis()
             st.pyplot(fig)
 
-            st.subheader("🏭 Supply Strength vs Savings (Top 5)")
-            strength_map = {"High": 3, "Medium": 2, "Low": 1}
-            fig2, ax2 = plt.subplots(figsize=(8, 6))
-            ax2.scatter(top5_df['Estimated Annual Savings ($)'], top5_df['Supply Strength'].map(strength_map), c='green', s=100)
-            ax2.set_yticks([1,2,3])
-            ax2.set_yticklabels(['Low','Medium','High'])
-            ax2.set_xlabel('Estimated Annual Savings ($)')
-            ax2.set_ylabel('Supply Strength')
-            ax2.set_title('Top 5: Supply Strength vs Savings')
-            st.pyplot(fig2)
-
             # Top Recommendation
             top_option = top5_df.iloc[0]
             st.success(f"🏆 Best Option: **{top_option['Alternative Country']}** — Save **{top_option['Saving %']}%** = **${top_option['Estimated Annual Savings ($)']:,.2f}** per year! (Supply Strength: {top_option['Supply Strength']})")
 
-            # --- Smart User Action Options
-            st.subheader("🚀 Next Steps")
-            actions = st.selectbox(
-                "Choose an action:",
-                (
-                    f"Find Top Vendors in {top_option['Alternative Country']}",
-                    f"Find Sourcing Websites for {category} from {top_option['Alternative Country']}",
-                    "No Action Now"
-                )
-            )
+            # --- New Vendor Help Search
+            st.subheader("🚀 Sourcing Help")
+            vendor_query = st.text_input("What sourcing help do you want? (Example: 'Find top furniture vendors in Vietnam')")
 
-            if actions != "No Action Now":
-                with st.spinner("Searching options..."):
+            if "chat_history" not in st.session_state:
+                st.session_state.chat_history = []
 
-                    user_action_question = f"{actions}. Please provide specific names and websites if possible."
+            if vendor_query:
+                api_key = st.secrets["GROQ_API_KEY"]
+                openai.api_key = api_key
+                openai.api_base = "https://api.groq.com/openai/v1"
 
-                    api_key = st.secrets["GROQ_API_KEY"]
-                    openai.api_key = api_key
-                    openai.api_base = "https://api.groq.com/openai/v1"
-
+                with st.spinner("Fetching sourcing suggestions..."):
                     try:
                         response = openai.ChatCompletion.create(
                             model="llama3-70b-8192",
                             messages=[
                                 {"role": "system", "content": "You are a global sourcing expert helping businesses find vendors and platforms for international trade."},
-                                {"role": "user", "content": user_action_question},
+                                {"role": "user", "content": vendor_query},
                             ],
                             temperature=0.3,
                             max_tokens=1000
                         )
                         reply = response['choices'][0]['message']['content']
-                        st.success(reply)
-
+                        st.session_state.chat_history.append((vendor_query, reply))
                     except Exception as e:
                         st.error(f"⚠️ Failed to get a response: {str(e)}")
+
+            # Display full chat history
+            for i, (q, a) in enumerate(st.session_state.chat_history[::-1]):
+                with st.expander(f"💬 Q{i+1}: {q}", expanded=False):
+                    st.write(a)
 
         else:
             st.warning("❗ No better alternative countries found.")
